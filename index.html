@@ -9,7 +9,7 @@
         :root {
             --primary-color: #75a00d;
             --link-color: #96c83c;
-            --background-secondary: #272726;
+            --background-secondary: rgba(39, 39, 38, 0.7);
             --app-color: #151514;
             --outline-lightcolor: #303030;
             --text-color: #cbcbcb;
@@ -35,6 +35,7 @@
             background-color: var(--app-color);
             color: var(--text-color);
             padding: 20px;
+            overflow: hidden;
         }
 
         .container {
@@ -44,11 +45,46 @@
             max-width: 450px;
             width: 100%;
             box-shadow:
-                0 0 0 1px #3c3c3c,
-                0 0 0 4px #282828,
-                0 0 0 5px #3c3c3c,
+                0 0 0 1px rgba(60, 60, 60, 0.7),
+                0 0 0 4px rgba(40, 40, 40, 0.7),
+                0 0 0 5px rgba(60, 60, 60, 0.7),
                 0 0 0 6px var(--background-secondary);
             border-radius: 0;
+            position: absolute;
+            user-select: none;
+            transition: box-shadow 0.3s ease;
+        }
+
+        .container:active {
+            box-shadow:
+                0 0 0 1px rgba(60, 60, 60, 0.7),
+                0 0 0 4px rgba(40, 40, 40, 0.7),
+                0 0 0 5px rgba(60, 60, 60, 0.7),
+                0 0 0 6px var(--background-secondary),
+                0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        .container.blurred {
+            filter: blur(20px);
+            pointer-events: none;
+        }
+
+        .container.dragging {
+            transition: none;
+        }
+
+        .container.releasing {
+            transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+
+        .drag-handle {
+            position: absolute;
+            top: -15px;
+            left: -15px;
+            right: -15px;
+            height: 35px;
+            cursor: move;
+            z-index: 10;
         }
 
         .header-line {
@@ -57,6 +93,7 @@
             background-size: 400% 100%;
             margin: -20px -30px 25px -30px;
             animation: rgbTop 3s infinite linear;
+            pointer-events: none;
         }
 
         @keyframes rgbTop {
@@ -131,6 +168,7 @@
             font-weight: normal;
             font-size: 0.9em;
             text-shadow: none;
+            cursor: pointer;
         }
 
         .terminal-info a:hover {
@@ -154,28 +192,166 @@
             color: var(--primary-color);
             animation: blink 1s step-end infinite;
         }
+
+        .input-line {
+            margin-top: 25px;
+            line-height: 1.2;
+            font-size: 0.9em;
+            color: var(--text-color);
+            word-wrap: break-word;
+        }
+
+        .input-prompt {
+            color: var(--text-color);
+        }
+
+        .input-prompt .cursor {
+            color: var(--primary-color);
+        }
+
+        .user-input {
+            color: var(--text-color);
+        }
+
+        .hint-text {
+            position: absolute;
+            bottom: 5px;
+            right: 10px;
+            font-size: 0.65em;
+            color: rgba(176, 176, 176, 0.25);
+        }
+
+        #entrance-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: transparent;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            cursor: pointer;
+            transition: opacity 0.5s ease;
+        }
+
+        #entrance-overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        #entrance-overlay .enter-text {
+            color: var(--primary-color);
+            font-size: 1.5em;
+            text-shadow: 0 0 10px rgba(117, 160, 13, 0.5);
+            letter-spacing: 2px;
+        }
+
+        .volume-control {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(39, 39, 38, 0.9);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            padding: 10px 15px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+
+        .volume-control.show {
+            opacity: 1;
+        }
+
+        .volume-icon {
+            width: 20px;
+            height: 20px;
+            color: var(--text-color);
+            flex-shrink: 0;
+        }
+
+        .volume-slider {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100px;
+            height: 4px;
+            background: #4a4a4a;
+            outline: none;
+            border-radius: 2px;
+            cursor: pointer;
+        }
+
+        .volume-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 14px;
+            height: 14px;
+            background: var(--text-color);
+            border-radius: 50%;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .volume-slider::-webkit-slider-thumb:hover {
+            background: var(--link-color);
+        }
+
+        .volume-slider::-moz-range-thumb {
+            width: 14px;
+            height: 14px;
+            background: var(--text-color);
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .volume-slider::-moz-range-thumb:hover {
+            background: var(--link-color);
+        }
     </style>
 </head>
 <body>
-    <audio id="bgmusic" autoplay loop>
+
+    <audio id="bgmusic" loop>
         <source src="audio.mp3" type="audio/mpeg">
     </audio>
 
-    <div class="container">
+    <div id="entrance-overlay">
+        <div class="enter-text">click to enter.</div>
+    </div>
+
+    <div class="volume-control" id="volumeControl">
+        <svg class="volume-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+            <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+        </svg>
+        <input type="range" min="0" max="100" value="30" class="volume-slider" id="volumeSlider">
+    </div>
+
+    <div class="container blurred" id="container">
+
+        <div class="drag-handle" id="dragHandle"></div>
 
         <div class="header-line"></div>
 
-        <p class="prompt">user@host:~<span class="cursor">$</span> whoami</p>
+        <p class="prompt">smutchev@smutchev:~<span class="cursor">$</span> whoami</p>
 
         <div class="whoami-block">
             <p class="whoami-output">smutchev</p>
             <span class="uid">[UID: 1337]</span>
         </div>
 
-        <p class="prompt" style="margin-top: 15px;">user@host:~<span class="cursor">$</span> cat bio.txt</p>
+        <p class="prompt" style="margin-top: 15px;">smutchev@smutchev:~<span class="cursor">$</span> cat bio.txt</p>
 
         <p class="subtitle">I hope I get hit by a truck</p>
-        <p class="prompt" style="margin-top: 0;">user@host:~<span class="cursor">$</span> cat contacts.txt</p>
+        <p class="prompt" style="margin-top: 0;">smutchev@smutchev:~<span class="cursor">$</span> cat contacts.txt</p>
 
         <div class="terminal-info">
             <span class="label">telegram:</span>
@@ -192,9 +368,181 @@
             <a href="https://github.com/smutchev" target="_blank">/smutchev</a>
         </div>
 
-        <p class="prompt" style="margin-top: 25px;">user@host:~<span class="cursor">$</span> <span class="blinking-cursor">█</span></p>
+        <p class="input-line">
+            <span class="input-prompt">smutchev@smutchev:~<span class="cursor">$</span></span><span class="user-input" id="userInput"></span><span class="blinking-cursor">█</span>
+        </p>
+
+        <p class="hint-text">enter to clear</p>
 
     </div>
+
+    <script>
+        const audio = document.getElementById('bgmusic');
+        const overlay = document.getElementById('entrance-overlay');
+        const container = document.getElementById('container');
+        const volumeControl = document.getElementById('volumeControl');
+        const volumeSlider = document.getElementById('volumeSlider');
+        const dragHandle = document.getElementById('dragHandle');
+        const userInput = document.getElementById('userInput');
+
+        audio.volume = 0.3;
+
+        let idleTimer = null;
+        let easterEggActive = false;
+        const easterEggText = 'sybau';
+
+        overlay.addEventListener('click', function() {
+            audio.play();
+            overlay.classList.add('hidden');
+            container.classList.remove('blurred');
+
+            setTimeout(() => {
+                overlay.style.display = 'none';
+                volumeControl.classList.add('show');
+                startIdleTimer();
+            }, 500);
+        });
+
+        volumeSlider.addEventListener('input', function() {
+            audio.volume = this.value / 100;
+        });
+
+        function resetIdleTimer() {
+            if (easterEggActive) return;
+            clearTimeout(idleTimer);
+            startIdleTimer();
+        }
+
+        function startIdleTimer() {
+            if (overlay.style.display !== 'none') return;
+            idleTimer = setTimeout(triggerEasterEgg, 15000);
+        }
+
+        async function triggerEasterEgg() {
+            if (easterEggActive || userInput.textContent.length > 0) return;
+            easterEggActive = true;
+
+            for (let i = 0; i < easterEggText.length; i++) {
+                await sleep(200);
+                userInput.textContent += easterEggText[i];
+            }
+
+            await sleep(800);
+
+            for (let i = easterEggText.length - 1; i >= 0; i--) {
+                await sleep(150);
+                userInput.textContent = userInput.textContent.slice(0, -1);
+            }
+
+            easterEggActive = false;
+            startIdleTimer();
+        }
+
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        document.addEventListener('keydown', function(e) {
+            if (overlay.style.display !== 'none') return;
+
+            if (easterEggActive) {
+                easterEggActive = false;
+                userInput.textContent = '';
+                startIdleTimer();
+                return;
+            }
+
+            resetIdleTimer();
+
+            if (e.key === 'Enter') {
+                userInput.textContent = '';
+            } else if (e.key === 'Backspace') {
+                e.preventDefault();
+                userInput.textContent = userInput.textContent.slice(0, -1);
+            } else if (e.key.length === 1) {
+                if (userInput.textContent.length < 25) {
+                    userInput.textContent += e.key;
+                }
+            }
+        });
+
+        document.addEventListener('mousemove', function(e) {
+            if (!e.target.closest('.volume-control')) {
+                resetIdleTimer();
+            }
+        });
+
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.volume-control')) {
+                resetIdleTimer();
+            }
+        });
+
+        let isDragging = false;
+        let currentX;
+        let currentY;
+        let initialX;
+        let initialY;
+        let xOffset = 0;
+        let yOffset = 0;
+
+        dragHandle.addEventListener('mousedown', dragStart);
+        document.addEventListener('mousemove', drag);
+        document.addEventListener('mouseup', dragEnd);
+
+        dragHandle.addEventListener('touchstart', dragStart);
+        document.addEventListener('touchmove', drag);
+        document.addEventListener('touchend', dragEnd);
+
+        function dragStart(e) {
+            if (e.type === 'touchstart') {
+                initialX = e.touches[0].clientX - xOffset;
+                initialY = e.touches[0].clientY - yOffset;
+            } else {
+                initialX = e.clientX - xOffset;
+                initialY = e.clientY - yOffset;
+            }
+
+            isDragging = true;
+            container.classList.add('dragging');
+            container.classList.remove('releasing');
+            resetIdleTimer();
+        }
+
+        function drag(e) {
+            if (isDragging) {
+                e.preventDefault();
+
+                if (e.type === 'touchmove') {
+                    currentX = e.touches[0].clientX - initialX;
+                    currentY = e.touches[0].clientY - initialY;
+                } else {
+                    currentX = e.clientX - initialX;
+                    currentY = e.clientY - initialY;
+                }
+
+                xOffset = currentX;
+                yOffset = currentY;
+
+                setTranslate(currentX, currentY, container);
+            }
+        }
+
+        function dragEnd(e) {
+            if (isDragging) {
+                initialX = currentX;
+                initialY = currentY;
+                isDragging = false;
+
+                container.classList.remove('dragging');
+                container.classList.add('releasing');
+            }
+        }
+
+        function setTranslate(xPos, yPos, el) {
+            el.style.transform = `translate(${xPos}px, ${yPos}px)`;
+        }
+    </script>
 
 </body>
 </html>

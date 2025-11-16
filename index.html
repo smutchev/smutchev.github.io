@@ -328,10 +328,22 @@
             background: var(--link-color);
         }
 
-        .cat-button {
+        .button-group {
             position: fixed;
             bottom: 20px;
             right: 20px;
+            display: flex;
+            gap: 10px;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+
+        .button-group.show {
+            opacity: 1;
+        }
+
+        .cat-button, .stuff-button {
             background: rgba(39, 39, 38, 0.85);
             backdrop-filter: blur(10px);
             -webkit-backdrop-filter: blur(10px);
@@ -341,16 +353,10 @@
             color: rgba(203, 203, 203, 0.6);
             font-size: 0.75em;
             cursor: pointer;
-            z-index: 1000;
-            opacity: 0;
             transition: all 0.3s ease;
         }
 
-        .cat-button.show {
-            opacity: 1;
-        }
-
-        .cat-button:hover {
+        .cat-button:hover, .stuff-button:hover {
             background: rgba(50, 50, 48, 0.9);
             color: var(--link-color);
         }
@@ -371,6 +377,36 @@
             cursor: grabbing;
             transform: scale(1.1);
         }
+
+        #stuff-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        #stuff-overlay.active {
+            display: flex;
+        }
+
+        #stuff-overlay.visible {
+            opacity: 1;
+        }
+
+        #stuff-overlay img {
+            max-width: 90%;
+            max-height: 90%;
+            object-fit: contain;
+            transition: opacity 0.3s ease;
+        }
     </style>
 </head>
 <body>
@@ -379,8 +415,12 @@
         <source src="audio.mp3" type="audio/mpeg">
     </audio>
 
+    <audio id="stuffAudio">
+        <source src="stuff.mp3" type="audio/mpeg">
+    </audio>
+
     <div id="entrance-overlay">
-        <div class="enter-text">click to enter.</div>
+        <div class="enter-text" id="enterText">click to enter.</div>
     </div>
 
     <div class="volume-control" id="volumeControl">
@@ -391,7 +431,14 @@
         <input type="range" min="0" max="100" value="30" class="volume-slider" id="volumeSlider">
     </div>
 
-    <button class="cat-button" id="catButton">click to get a cat</button>
+    <div class="button-group" id="buttonGroup">
+        <button class="cat-button" id="catButton" style="display: none;">click to get a cat</button>
+        <button class="stuff-button" id="stuffButton">naughty stuff</button>
+    </div>
+
+    <div id="stuff-overlay">
+        <img src="stuff.png" alt="stuff" id="stuffImage">
+    </div>
 
     <div class="container blurred" id="container">
 
@@ -435,329 +482,366 @@
     </div>
 
     <script>
-        const audio = document.getElementById('bgmusic');
-        const overlay = document.getElementById('entrance-overlay');
-        const container = document.getElementById('container');
-        const volumeControl = document.getElementById('volumeControl');
-        const volumeSlider = document.getElementById('volumeSlider');
-        const volumeIcon = document.getElementById('volumeIcon');
-        const dragHandle = document.getElementById('dragHandle');
-        const userInput = document.getElementById('userInput');
-        const catButton = document.getElementById('catButton');
+        window.addEventListener('DOMContentLoaded', function() {
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
-        audio.volume = 0.3;
-        let previousVolume = 0.3;
-        let isMuted = false;
+            const audio = document.getElementById('bgmusic');
+            const stuffAudio = document.getElementById('stuffAudio');
+            const overlay = document.getElementById('entrance-overlay');
+            const container = document.getElementById('container');
+            const volumeControl = document.getElementById('volumeControl');
+            const volumeSlider = document.getElementById('volumeSlider');
+            const volumeIcon = document.getElementById('volumeIcon');
+            const dragHandle = document.getElementById('dragHandle');
+            const userInput = document.getElementById('userInput');
+            const catButton = document.getElementById('catButton');
+            const stuffButton = document.getElementById('stuffButton');
+            const buttonGroup = document.getElementById('buttonGroup');
+            const stuffOverlay = document.getElementById('stuff-overlay');
+            const stuffImage = document.getElementById('stuffImage');
+            const enterText = document.getElementById('enterText');
 
-        let idleTimer = null;
-        let easterEggActive = false;
-        const easterEggText = 'sybau';
-
-        const titleSequence = ['l', 'le', 'lee', 'leet', 'l3et', 'l33t', '133t', '1337', '133', '13', '1'];
-        let titleIndex = 0;
-        let titleDirection = 1;
-
-        function animateTitle() {
-            document.title = titleSequence[titleIndex];
-            titleIndex += titleDirection;
-
-            if (titleIndex >= titleSequence.length - 1) {
-                titleDirection = -1;
-            } else if (titleIndex <= 0) {
-                titleDirection = 1;
-            }
-        }
-
-        setInterval(animateTitle, 300);
-
-        const { Engine, Render, World, Bodies, Runner, Body, Mouse, MouseConstraint } = Matter;
-        const engine = Engine.create();
-        engine.world.gravity.y = 1;
-
-        const catBodies = [];
-        const catImages = [];
-        let draggedCat = null;
-        let mousePos = { x: 0, y: 0 };
-        let lastMousePos = { x: 0, y: 0 };
-
-        function spawnCat() {
-            const size = 100;
-            const x = Math.random() * (window.innerWidth - size);
-            const y = -size;
-
-            const cat = Bodies.circle(x + size/2, y + size/2, size/2, {
-                restitution: 0.8,
-                friction: 0.3,
-                density: 0.001,
-                frictionAir: 0.01
-            });
-
-            World.add(engine.world, cat);
-            catBodies.push(cat);
-
-            const img = document.createElement('img');
-            img.src = `https://cataas.com/cat?${Date.now()}`;
-            img.className = 'cat-img';
-            img.style.width = size + 'px';
-            img.style.height = size + 'px';
-            document.body.appendChild(img);
-
-            const catData = { body: cat, element: img };
-            catImages.push(catData);
-
-            img.addEventListener('mousedown', (e) => startDragCat(e, catData));
-            img.addEventListener('touchstart', (e) => startDragCat(e, catData));
-        }
-
-        function startDragCat(e, catData) {
-            e.preventDefault();
-            draggedCat = catData;
-            Body.setStatic(catData.body, true);
-            lastMousePos = { x: e.clientX || e.touches[0].clientX, y: e.clientY || e.touches[0].clientY };
-        }
-
-        document.addEventListener('mousemove', (e) => {
-            mousePos = { x: e.clientX, y: e.clientY };
-            if (draggedCat) {
-                Body.setPosition(draggedCat.body, { x: e.clientX, y: e.clientY });
-            }
-        });
-
-        document.addEventListener('touchmove', (e) => {
-            mousePos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-            if (draggedCat) {
-                Body.setPosition(draggedCat.body, { x: e.touches[0].clientX, y: e.touches[0].clientY });
-            }
-        });
-
-        document.addEventListener('mouseup', releaseCat);
-        document.addEventListener('touchend', releaseCat);
-
-        function releaseCat(e) {
-            if (draggedCat) {
-                Body.setStatic(draggedCat.body, false);
-    
-                const velocityX = (mousePos.x - lastMousePos.x) *   0.1;
-                const velocityY = (mousePos.y - lastMousePos.y) *   0.1;
-                Body.setVelocity(draggedCat.body, { x: velocityX, y:    velocityY });
-    
-                draggedCat = null;
-            }
-        }
-
-        const ground = Bodies.rectangle(window.innerWidth / 2, window.innerHeight + 25, window.innerWidth, 50, { isStatic: true });
-        const leftWall = Bodies.rectangle(-25, window.innerHeight / 2, 50, window.innerHeight, { isStatic: true });
-        const rightWall = Bodies.rectangle(window.innerWidth + 25, window.innerHeight / 2, 50, window.innerHeight, { isStatic: true });
-        World.add(engine.world, [ground, leftWall, rightWall]);
-
-        const runner = Runner.create();
-        Runner.run(runner, engine);
-
-        function updateCats() {
-            catImages.forEach(({ body, element }, index) => {
-                element.style.left = (body.position.x - 50) + 'px';
-                element.style.top = (body.position.y - 50) + 'px';
-                element.style.transform = `rotate(${body.angle}rad)`;
-
-                if (body.position.y > window.innerHeight + 200 ||
-                    body.position.x < -200 ||
-                    body.position.x > window.innerWidth + 200 ||
-                    body.position.y < -200) {
-
-                    World.remove(engine.world, body);
-                    element.remove();
-                    catImages.splice(index, 1);
-                    const bodyIndex = catBodies.indexOf(body);
-                    if (bodyIndex > -1) catBodies.splice(bodyIndex, 1);
-                }
-            });
-            requestAnimationFrame(updateCats);
-        }
-        updateCats();
-
-        catButton.addEventListener('click', spawnCat);
-
-        overlay.addEventListener('click', function() {
-            audio.play();
-            overlay.classList.add('hidden');
-            container.classList.remove('blurred');
-
-            setTimeout(() => {
-                overlay.style.display = 'none';
-                volumeControl.classList.add('show');
-                catButton.classList.add('show');
-                startIdleTimer();
-            }, 500);
-        });
-
-        volumeSlider.addEventListener('input', function() {
-            const newVolume = this.value / 100;
-            audio.volume = newVolume;
-            if (newVolume > 0 && isMuted) {
-                isMuted = false;
-                volumeIcon.classList.remove('muted');
-            }
-            if (newVolume === 0) {
-                isMuted = true;
-                volumeIcon.classList.add('muted');
-            }
-            previousVolume = newVolume > 0 ? newVolume : previousVolume;
-        });
-
-        volumeIcon.addEventListener('click', function() {
-            if (isMuted) {
-                audio.volume = previousVolume;
-                volumeSlider.value = previousVolume * 100;
-                isMuted = false;
-                volumeIcon.classList.remove('muted');
-            } else {
-                previousVolume = audio.volume;
-                audio.volume = 0;
-                volumeSlider.value = 0;
-                isMuted = true;
-                volumeIcon.classList.add('muted');
-            }
-        });
-
-        function resetIdleTimer() {
-            if (easterEggActive) return;
-            clearTimeout(idleTimer);
-            startIdleTimer();
-        }
-
-        function startIdleTimer() {
-            if (overlay.style.display !== 'none') return;
-            idleTimer = setTimeout(triggerEasterEgg, 15000);
-        }
-
-        async function triggerEasterEgg() {
-            if (easterEggActive || userInput.textContent.length > 0) return;
-            easterEggActive = true;
-
-            for (let i = 0; i < easterEggText.length; i++) {
-                await sleep(200);
-                userInput.textContent += easterEggText[i];
+            if (isMobile) {
+                enterText.textContent = 'tap to enter.';
             }
 
-            await sleep(800);
+            audio.volume = 0.3;
+            let previousVolume = 0.3;
+            let isMuted = false;
 
-            for (let i = easterEggText.length - 1; i >= 0; i--) {
-                await sleep(150);
-                userInput.textContent = userInput.textContent.slice(0, -1);
-            }
+            let idleTimer = null;
+            let easterEggActive = false;
+            const easterEggText = 'sybau';
 
-            easterEggActive = false;
-            startIdleTimer();
-        }
+            const titleSequence = ['l', 'le', 'lee', 'leet', 'l3et', 'l33t', '133t', '1337', '133', '13', '1'];
+            let titleIndex = 0;
+            let titleDirection = 1;
 
-        function sleep(ms) {
-            return new Promise(resolve => setTimeout(resolve, ms));
-        }
+            function animateTitle() {
+                document.title = titleSequence[titleIndex];
+                titleIndex += titleDirection;
 
-        document.addEventListener('keydown', function(e) {
-            if (overlay.style.display !== 'none') return;
-
-            if (easterEggActive) {
-                easterEggActive = false;
-                userInput.textContent = '';
-                startIdleTimer();
-                return;
-            }
-
-            resetIdleTimer();
-
-            if (e.key === 'Enter') {
-                userInput.textContent = '';
-            } else if (e.key === 'Backspace') {
-                e.preventDefault();
-                userInput.textContent = userInput.textContent.slice(0, -1);
-            } else if (e.key.length === 1) {
-                if (userInput.textContent.length < 25) {
-                    userInput.textContent += e.key;
+                if (titleIndex >= titleSequence.length - 1) {
+                    titleDirection = -1;
+                } else if (titleIndex <= 0) {
+                    titleDirection = 1;
                 }
             }
-        });
 
-        document.addEventListener('mousemove', function(e) {
-            if (!e.target.closest('.volume-control') && !e.target.closest('.cat-button')) {
-                resetIdleTimer();
+            setInterval(animateTitle, 300);
+
+            stuffButton.addEventListener('click', function() {
+                stuffOverlay.classList.add('active');
+                setTimeout(() => {
+                    stuffOverlay.classList.add('visible');
+                }, 10);
+
+                stuffAudio.currentTime = 0;
+                stuffAudio.play();
+
+                setTimeout(() => {
+                    stuffOverlay.classList.remove('visible');
+                    setTimeout(() => {
+                        stuffOverlay.classList.remove('active');
+                    }, 300);
+                }, 3000);
+            });
+
+            let engine, World, Bodies, Runner, Body;
+            let catBodies = [];
+            let catImages = [];
+            let draggedCat = null;
+            let mousePos = { x: 0, y: 0 };
+            let lastMousePos = { x: 0, y: 0 };
+
+            if (!isMobile && typeof Matter !== 'undefined') {
+                ({ Engine, World, Bodies, Runner, Body } = Matter);
+                engine = Engine.create();
+                engine.world.gravity.y = 1;
+
+                function spawnCat() {
+                    const size = 100;
+                    const x = Math.random() * (window.innerWidth - size);
+                    const y = -size;
+
+                    const cat = Bodies.circle(x + size/2, y + size/2, size/2, {
+                        restitution: 0.8,
+                        friction: 0.3,
+                        density: 0.001,
+                        frictionAir: 0.01
+                    });
+
+                    World.add(engine.world, cat);
+                    catBodies.push(cat);
+
+                    const img = document.createElement('img');
+                    img.src = `https://cataas.com/cat?${Date.now()}`;
+                    img.className = 'cat-img';
+                    img.style.width = size + 'px';
+                    img.style.height = size + 'px';
+                    document.body.appendChild(img);
+
+                    const catData = { body: cat, element: img };
+                    catImages.push(catData);
+
+                    img.addEventListener('mousedown', (e) => startDragCat(e, catData));
+                    img.addEventListener('touchstart', (e) => startDragCat(e, catData));
+                }
+
+                function startDragCat(e, catData) {
+                    e.preventDefault();
+                    draggedCat = catData;
+                    Body.setStatic(catData.body, true);
+                    lastMousePos = { x: e.clientX || e.touches[0].clientX, y: e.clientY || e.touches[0].clientY };
+                }
+
+                document.addEventListener('mousemove', (e) => {
+                    mousePos = { x: e.clientX, y: e.clientY };
+                    if (draggedCat) {
+                        Body.setPosition(draggedCat.body, { x: e.clientX, y: e.clientY });
+                    }
+                });
+
+                document.addEventListener('touchmove', (e) => {
+                    mousePos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                    if (draggedCat) {
+                        Body.setPosition(draggedCat.body, { x: e.touches[0].clientX, y: e.touches[0].clientY });
+                    }
+                });
+
+                document.addEventListener('mouseup', releaseCat);
+                document.addEventListener('touchend', releaseCat);
+
+                function releaseCat(e) {
+                    if (draggedCat) {
+                        Body.setStatic(draggedCat.body, false);
+
+                        const velocityX = (mousePos.x - lastMousePos.x) * 0.1;
+                        const velocityY = (mousePos.y - lastMousePos.y) * 0.1;
+                        Body.setVelocity(draggedCat.body, { x: velocityX, y: velocityY });
+
+                        draggedCat = null;
+                    }
+                }
+
+                const ground = Bodies.rectangle(window.innerWidth / 2, window.innerHeight + 25, window.innerWidth, 50, { isStatic: true });
+                const leftWall = Bodies.rectangle(-25, window.innerHeight / 2, 50, window.innerHeight, { isStatic: true });
+                const rightWall = Bodies.rectangle(window.innerWidth + 25, window.innerHeight / 2, 50, window.innerHeight, { isStatic: true });
+                World.add(engine.world, [ground, leftWall, rightWall]);
+
+                const runner = Runner.create();
+                Runner.run(runner, engine);
+
+                function updateCats() {
+                    catImages.forEach(({ body, element }, index) => {
+                        element.style.left = (body.position.x - 50) + 'px';
+                        element.style.top = (body.position.y - 50) + 'px';
+                        element.style.transform = `rotate(${body.angle}rad)`;
+
+                        if (body.position.y > window.innerHeight + 200 ||
+                            body.position.x < -200 ||
+                            body.position.x > window.innerWidth + 200 ||
+                            body.position.y < -200) {
+
+                            World.remove(engine.world, body);
+                            element.remove();
+                            catImages.splice(index, 1);
+                            const bodyIndex = catBodies.indexOf(body);
+                            if (bodyIndex > -1) catBodies.splice(bodyIndex, 1);
+                        }
+                    });
+                    requestAnimationFrame(updateCats);
+                }
+                updateCats();
+
+                catButton.addEventListener('click', spawnCat);
+
+                window.addEventListener('resize', () => {
+                    Body.setPosition(ground, { x: window.innerWidth / 2, y: window.innerHeight + 25 });
+                    Body.setPosition(rightWall, { x: window.innerWidth + 25, y: window.innerHeight / 2 });
+                });
             }
-        });
 
-        document.addEventListener('click', function(e) {
-            if (!e.target.closest('.volume-control') && !e.target.closest('.cat-button')) {
-                resetIdleTimer();
-            }
-        });
+            overlay.addEventListener('click', function() {
+                audio.play();
+                overlay.classList.add('hidden');
+                container.classList.remove('blurred');
 
-        let isDragging = false;
-        let currentX;
-        let currentY;
-        let initialX;
-        let initialY;
-        let xOffset = 0;
-        let yOffset = 0;
+                setTimeout(() => {
+                    overlay.style.display = 'none';
+                    volumeControl.classList.add('show');
+                    buttonGroup.classList.add('show');
+                    if (!isMobile) {
+                        catButton.style.display = 'block';
+                    }
+                    startIdleTimer();
+                }, 500);
+            });
 
-        dragHandle.addEventListener('mousedown', dragStart);
-        document.addEventListener('mousemove', drag);
-        document.addEventListener('mouseup', dragEnd);
+            volumeSlider.addEventListener('input', function() {
+                const newVolume = this.value / 100;
+                audio.volume = newVolume;
+                if (newVolume > 0 && isMuted) {
+                    isMuted = false;
+                    volumeIcon.classList.remove('muted');
+                }
+                if (newVolume === 0) {
+                    isMuted = true;
+                    volumeIcon.classList.add('muted');
+                }
+                previousVolume = newVolume > 0 ? newVolume : previousVolume;
+            });
 
-        dragHandle.addEventListener('touchstart', dragStart);
-        document.addEventListener('touchmove', drag);
-        document.addEventListener('touchend', dragEnd);
-
-        function dragStart(e) {
-            if (e.type === 'touchstart') {
-                initialX = e.touches[0].clientX - xOffset;
-                initialY = e.touches[0].clientY - yOffset;
-            } else {
-                initialX = e.clientX - xOffset;
-                initialY = e.clientY - yOffset;
-            }
-
-            isDragging = true;
-            container.classList.add('dragging');
-            container.classList.remove('releasing');
-            resetIdleTimer();
-        }
-
-        function drag(e) {
-            if (isDragging) {
-                e.preventDefault();
-
-                if (e.type === 'touchmove') {
-                    currentX = e.touches[0].clientX - initialX;
-                    currentY = e.touches[0].clientY - initialY;
+            volumeIcon.addEventListener('click', function() {
+                if (isMuted) {
+                    audio.volume = previousVolume;
+                    volumeSlider.value = previousVolume * 100;
+                    isMuted = false;
+                    volumeIcon.classList.remove('muted');
                 } else {
-                    currentX = e.clientX - initialX;
-                    currentY = e.clientY - initialY;
+                    previousVolume = audio.volume;
+                    audio.volume = 0;
+                    volumeSlider.value = 0;
+                    isMuted = true;
+                    volumeIcon.classList.add('muted');
+                }
+            });
+
+            function resetIdleTimer() {
+                if (easterEggActive) return;
+                clearTimeout(idleTimer);
+                startIdleTimer();
+            }
+
+            function startIdleTimer() {
+                if (overlay.style.display !== 'none') return;
+                idleTimer = setTimeout(triggerEasterEgg, 15000);
+            }
+
+            async function triggerEasterEgg() {
+                if (easterEggActive || userInput.textContent.length > 0) return;
+                easterEggActive = true;
+
+                for (let i = 0; i < easterEggText.length; i++) {
+                    await sleep(200);
+                    userInput.textContent += easterEggText[i];
                 }
 
-                xOffset = currentX;
-                yOffset = currentY;
+                await sleep(800);
 
-                setTranslate(currentX, currentY, container);
+                for (let i = easterEggText.length - 1; i >= 0; i--) {
+                    await sleep(150);
+                    userInput.textContent = userInput.textContent.slice(0, -1);
+                }
+
+                easterEggActive = false;
+                startIdleTimer();
             }
-        }
 
-        function dragEnd(e) {
-            if (isDragging) {
-                initialX = currentX;
-                initialY = currentY;
-                isDragging = false;
-
-                container.classList.remove('dragging');
-                container.classList.add('releasing');
+            function sleep(ms) {
+                return new Promise(resolve => setTimeout(resolve, ms));
             }
-        }
 
-        function setTranslate(xPos, yPos, el) {
-            el.style.transform = `translate(${xPos}px, ${yPos}px)`;
-        }
+            document.addEventListener('keydown', function(e) {
+                if (overlay.style.display !== 'none') return;
 
-        window.addEventListener('resize', () => {
-            Body.setPosition(ground, { x: window.innerWidth / 2, y: window.innerHeight + 25 });
-            Body.setPosition(rightWall, { x: window.innerWidth + 25, y: window.innerHeight / 2 });
+                if (easterEggActive) {
+                    easterEggActive = false;
+                    userInput.textContent = '';
+                    startIdleTimer();
+                    return;
+                }
+
+                resetIdleTimer();
+
+                if (e.key === 'Enter') {
+                    userInput.textContent = '';
+                } else if (e.key === 'Backspace') {
+                    e.preventDefault();
+                    userInput.textContent = userInput.textContent.slice(0, -1);
+                } else if (e.key.length === 1) {
+                    if (userInput.textContent.length < 25) {
+                        userInput.textContent += e.key;
+                    }
+                }
+            });
+
+            document.addEventListener('mousemove', function(e) {
+                if (!e.target.closest('.volume-control') && !e.target.closest('.button-group')) {
+                    resetIdleTimer();
+                }
+            });
+
+            document.addEventListener('click', function(e) {
+                if (!e.target.closest('.volume-control') && !e.target.closest('.button-group')) {
+                    resetIdleTimer();
+                }
+            });
+
+            let isDragging = false;
+            let currentX;
+            let currentY;
+            let initialX;
+            let initialY;
+            let xOffset = 0;
+            let yOffset = 0;
+
+            dragHandle.addEventListener('mousedown', dragStart);
+            document.addEventListener('mousemove', drag);
+            document.addEventListener('mouseup', dragEnd);
+
+            dragHandle.addEventListener('touchstart', dragStart);
+            document.addEventListener('touchmove', drag);
+            document.addEventListener('touchend', dragEnd);
+
+            function dragStart(e) {
+                if (e.type === 'touchstart') {
+                    initialX = e.touches[0].clientX - xOffset;
+                    initialY = e.touches[0].clientY - yOffset;
+                } else {
+                    initialX = e.clientX - xOffset;
+                    initialY = e.clientY - yOffset;
+                }
+
+                isDragging = true;
+                container.classList.add('dragging');
+                container.classList.remove('releasing');
+                resetIdleTimer();
+            }
+
+            function drag(e) {
+                if (isDragging) {
+                    e.preventDefault();
+
+                    if (e.type === 'touchmove') {
+                        currentX = e.touches[0].clientX - initialX;
+                        currentY = e.touches[0].clientY - initialY;
+                    } else {
+                        currentX = e.clientX - initialX;
+                        currentY = e.clientY - initialY;
+                    }
+
+                    xOffset = currentX;
+                    yOffset = currentY;
+
+                    setTranslate(currentX, currentY, container);
+                }
+            }
+
+            function dragEnd(e) {
+                if (isDragging) {
+                    initialX = currentX;
+                    initialY = currentY;
+                    isDragging = false;
+
+                    container.classList.remove('dragging');
+                    container.classList.add('releasing');
+                }
+            }
+
+            function setTranslate(xPos, yPos, el) {
+                el.style.transform = `translate(${xPos}px, ${yPos}px)`;
+            }
         });
     </script>
 
